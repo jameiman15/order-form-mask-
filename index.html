@@ -400,7 +400,7 @@
                 <div class="info-group">
                     <div class="info-row">
                         <span class="label">收貨人：</span>
-                        <input class="input-field" type="text" value="璞之妍診所" id="recipient">
+                        <input class="input-field" type="text" value="瑞之妍診所" id="recipient">
                     </div>
                     <div class="info-row">
                         <span class="label">收貨地址：</span>
@@ -408,7 +408,7 @@
                     </div>
                     <div class="info-row">
                         <span class="label">聯絡人：</span>
-                        <input class="input-field" type="text" value="璞之妍診所 Cally" id="deliveryContact">
+                        <input class="input-field" type="text" value="瑞之妍診所 Cally" id="deliveryContact">
                     </div>
                     <div class="info-row">
                         <span class="label">電話：</span>
@@ -527,7 +527,7 @@
                 <ol>
                     <li>本公司出貨前皆會進行產品使用測試與檢查，確保產品功能正常與配套附件皆完整無缺少。</li>
                     <li>請收貨時確認商品內容物與配件完整性(產品主體/電源供應器/配件)及使用狀況皆正常。</li>
-                    <li>依消保法第19條第1項例外6規定**本產品為醫療器材並牽涉個人使用衛生，因此若非產品問題/經拆封使用/試用，則不接受退換貨。</li>
+                    <li>依消保法第19條第1項例外6要定**本產品為醫療器材並牽涉個人使用衛生，因此若非產品問題/經拆封使用/試用，則不接受退換貨。</li>
                 </ol>
                 
                 <div class="signature">
@@ -547,14 +547,21 @@
         const productsDB = [
             { id: 'ID-505', name: 'iRESTORE 雷射生髮帽-專業型', unitPrice_noTax: 21905 },
             { id: 'ID-505B', name: 'iRESTORE 行動供電器-專業型專用', unitPrice_noTax: 1238 },
-            { id: 'ID-53033', name: 'iRESTORE 愛麗朵爾束口收納袋', unitPrice_noTax: 0 },
+            { id: 'ID-53033', name: 'iRESTORE 束口收納袋', unitPrice_noTax: 0 },
             { id: 'ID-510', name: 'iRESTORE 雷射生髮帽-旗艦型', unitPrice_noTax: 36190 },
             { id: 'ID-510B', name: 'iRESTORE 行動供電器-旗艦型專用', unitPrice_noTax: 1905 },
             { id: 'ID-610', name: 'iRESTORE 光透美容面罩', unitPrice_noTax: 6429 },
-            { id: 'ID-60001', name: 'iRESTORE 立毛雙效精華液', unitPrice_noTax: 0 },
+            { id: 'ID-60001', name: 'iRESTORE 睫毛雙效精華液', unitPrice_noTax: 0 },
             { id: 'ID-50004', name: 'iRESTORE 氣墊按摩梳', unitPrice_noTax: 0 },
-            { id: 'ID-53034', name: 'iRESTORE 愛麗朵爾白色紙袋', unitPrice_noTax: 0 },
+            { id: 'ID-53034', name: 'iRESTORE 白色紙袋', unitPrice_noTax: 0 },
         ];
+
+        // 定義搭配商品組合
+        const bundledProducts = {
+            'ID-505': ['ID-505B', 'ID-53033', 'ID-50004', 'ID-53034'],
+            'ID-510': ['ID-510B', 'ID-50004', 'ID-53034'],
+            'ID-610': ['ID-60001', 'ID-53034']
+        };
 
         const TAX_RATE = 0.05;
         let orderItems = [];
@@ -589,6 +596,7 @@
             
             const product = productsDB.find(p => p.id === selectedProductId);
             
+            // 新增主商品
             const newItem = {
                 id: itemCounter++,
                 productId: product.id,
@@ -598,18 +606,53 @@
                 quantity: quantity,
                 subtotal: product.unitPrice_noTax * quantity,
                 startSerial: '',
-                endSerial: ''
+                endSerial: '',
+                isMainProduct: true,
+                bundleParentId: null
             };
             
             orderItems.push(newItem);
+
+            // 檢查是否有搭配商品需要自動新增
+            if (bundledProducts[selectedProductId]) {
+                bundledProducts[selectedProductId].forEach(bundledProductId => {
+                    const bundledProduct = productsDB.find(p => p.id === bundledProductId);
+                    if (bundledProduct) {
+                        const bundledItem = {
+                            id: itemCounter++,
+                            productId: bundledProduct.id,
+                            name: bundledProduct.name,
+                            unitPrice_noTax: bundledProduct.unitPrice_noTax,
+                            unitPrice_withTax: Math.round(bundledProduct.unitPrice_noTax * (1 + TAX_RATE)),
+                            quantity: quantity, // 搭配商品數量與主商品相同
+                            subtotal: bundledProduct.unitPrice_noTax * quantity,
+                            startSerial: '',
+                            endSerial: '',
+                            isMainProduct: false,
+                            bundleParentId: newItem.id
+                        };
+                        orderItems.push(bundledItem);
+                    }
+                });
+            }
+            
             renderTable();
             calculateTotals();
             quantityInput.value = '1';
         }
         
         function removeProduct(id) {
+            const item = orderItems.find(p => p.id === id);
+            if (!item) return;
+
             if (confirm('確定要刪除這個產品嗎？')) {
-                orderItems = orderItems.filter(p => p.id !== id);
+                // 如果是主商品，同時刪除所有搭配商品
+                if (item.isMainProduct) {
+                    orderItems = orderItems.filter(p => p.id !== id && p.bundleParentId !== id);
+                } else {
+                    // 如果是搭配商品，只刪除該商品
+                    orderItems = orderItems.filter(p => p.id !== id);
+                }
                 renderTable();
                 calculateTotals();
             }
@@ -623,26 +666,41 @@
                 return;
             }
             
-            tbody.innerHTML = orderItems.map(item => `
+            tbody.innerHTML = orderItems.map(item => {
+                const productName = `${item.productId} - ${item.name}`;
+                
+                return `
                 <tr>
-                    <td class="product-name">${item.productId} - ${item.name}</td>
+                    <td class="product-name">${productName}</td>
                     <td><input type="text" class="serial-input" value="${item.startSerial}" oninput="updateSerial(${item.id}, 'startSerial', this.value)"></td>
                     <td><input type="text" class="serial-input" value="${item.endSerial}" oninput="updateSerial(${item.id}, 'endSerial', this.value)"></td>
                     <td>${item.unitPrice_noTax.toLocaleString()}</td>
-                    <td><input type="number" class="quantity-input" value="${item.quantity}" min="1" oninput="updateQuantity(${item.id}, this.value)"></td>
+                    <td><input type="number" class="quantity-input" value="${item.quantity}" min="1" oninput="updateQuantity(${item.id}, this.value)" ${item.isMainProduct ? '' : 'readonly'}></td>
                     <td>${item.subtotal.toLocaleString()}</td>
-                    <td><button class="btn btn-danger" onclick="removeProduct(${item.id})">刪除</button></td>
+                    <td><button class="btn btn-danger" onclick="removeProduct(${item.id})">${item.isMainProduct ? '刪除組合' : '刪除'}</button></td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function updateQuantity(id, value) {
             const item = orderItems.find(p => p.id === id);
             const quantity = parseInt(value) || 0;
-            if (item) {
+            
+            if (item && item.isMainProduct) {
+                // 更新主商品數量
                 item.quantity = quantity;
                 item.subtotal = item.unitPrice_noTax * quantity;
+                
+                // 同時更新所有搭配商品的數量
+                orderItems.forEach(bundledItem => {
+                    if (bundledItem.bundleParentId === id) {
+                        bundledItem.quantity = quantity;
+                        bundledItem.subtotal = bundledItem.unitPrice_noTax * quantity;
+                    }
+                });
             }
+            
             renderTable();
             calculateTotals();
         }
